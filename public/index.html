@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>TalkBee — Real-time messaging</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="light">
+
+<div id="setup-notice" class="hidden" style="position:fixed;inset:0;background:#16130A;color:#F5EDD8;display:flex;align-items:center;justify-content:center;padding:30px;z-index:9999;font-family:Inter,sans-serif;">
+  <div style="max-width:520px;">
+    <h1 style="font-family:Fraunces,serif;color:#FFC940;margin-bottom:14px;">⚙️ One setup step left</h1>
+    <p style="line-height:1.6;margin-bottom:12px;">TalkBee needs your Firebase project credentials to run. Open <code>public/js/firebase-config.js</code> and replace the placeholder values with your project's config from:</p>
+    <p style="line-height:1.6;margin-bottom:12px;"><b>Firebase Console → Project Settings → General → Your apps → Web app (&lt;/&gt;)</b></p>
+    <p style="line-height:1.6;color:#C9BE9E;">Also make sure Email/Password and Google sign-in are enabled under Authentication → Sign-in method, and that Firestore + Storage are created. See DEPLOY.md for the full checklist.</p>
+  </div>
+</div>
+
+<div id="app-root">
+
+  <!-- ============ AUTH SCREEN ============ -->
+  <div id="auth-screen" class="screen">
+    <div class="auth-card">
+      <div class="auth-brand"><span class="hex-mark">🐝</span></div>
+      <h2 id="auth-title">Welcome back</h2>
+      <p class="sub" id="auth-sub">Log in to keep the conversation going.</p>
+      <div class="err-msg" id="auth-error"></div>
+      <div class="ok-msg" id="auth-ok"></div>
+
+      <div id="login-form">
+        <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
+        <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
+        <div style="text-align:right;margin-bottom:16px;"><button class="link-btn" id="forgot-password-btn">Forgot password?</button></div>
+        <button class="btn btn-primary btn-block" id="login-submit-btn"><span class="btn-label">Log in</span></button>
+        <div class="divider-or">OR</div>
+        <button class="google-btn" id="google-login-btn"><span>🔵</span> Continue with Google</button>
+      </div>
+
+      <div id="register-form" class="hidden">
+        <div class="field"><label>Full name</label><input type="text" id="reg-name" placeholder="Jane Bee" autocomplete="name"></div>
+        <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
+        <div class="field"><label>Password</label><input type="password" id="reg-password" placeholder="Min. 6 characters" autocomplete="new-password"></div>
+        <button class="btn btn-primary btn-block" id="register-submit-btn"><span class="btn-label">Create account</span></button>
+        <div class="divider-or">OR</div>
+        <button class="google-btn" id="google-register-btn"><span>🔵</span> Continue with Google</button>
+      </div>
+
+      <div id="forgot-form" class="hidden">
+        <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:14px;">Enter your account email — we'll send a password reset link.</p>
+        <div class="field"><label>Email</label><input type="email" id="forgot-email" placeholder="you@example.com"></div>
+        <button class="btn btn-primary btn-block" id="forgot-submit-btn"><span class="btn-label">Send reset link</span></button>
+        <div class="auth-switch"><button id="back-to-login-btn">← Back to log in</button></div>
+      </div>
+
+      <div class="auth-switch" id="auth-switch-login-view">New here? <button id="show-register-btn">Create an account</button></div>
+      <div class="auth-switch hidden" id="auth-switch-register-view">Already have an account? <button id="show-login-btn">Log in</button></div>
+    </div>
+  </div>
+
+  <!-- ============ APP SCREEN ============ -->
+  <div id="app-screen" class="screen hidden">
+    <div class="rail">
+      <div class="brand-mini">🐝</div>
+      <button class="rail-btn active" data-tab="chats" title="Chats">💬<span class="badge hidden" id="rail-badge"></span></button>
+      <button class="rail-btn" id="rail-new-chat" title="New chat">➕</button>
+      <button class="rail-btn" id="rail-theme-btn" title="Toggle theme">🌙</button>
+      <button class="rail-btn" id="rail-settings-btn" title="Settings">⚙️</button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" id="rail-logout" title="Log out">🚪</button>
+      <div class="me-avatar" id="rail-me-avatar" title="Your profile"></div>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-head"><h1>TalkBee</h1></div>
+      <div class="search-box">🔍<input type="text" id="chat-search" placeholder="Search chats and messages..."></div>
+      <div class="tabs">
+        <button class="tab-btn active" data-filter="all">All</button>
+        <button class="tab-btn" data-filter="direct">Direct</button>
+        <button class="tab-btn" data-filter="group">Groups</button>
+      </div>
+      <div class="list-scroll" id="chat-list"></div>
+    </div>
+
+    <div class="chat-main" id="chat-main">
+      <div id="chat-empty"><div style="font-size:2.6rem;">🐝</div><p>Pick a chat to start messaging</p></div>
+      <div id="chat-active" class="hidden" style="display:flex;flex-direction:column;height:100%;">
+        <div class="chat-topbar">
+          <button class="icon-btn mobile-back" id="mobile-back-btn">←</button>
+          <div class="avatar-wrap" id="topbar-avatar-wrap"></div>
+          <div class="info" id="topbar-info"><div class="cname" id="topbar-name"></div><div class="cstatus" id="topbar-status"></div></div>
+          <button class="icon-btn" id="topbar-search-btn" title="Search in chat">🔍</button>
+          <button class="icon-btn" id="topbar-info-btn" title="Chat info">ℹ️</button>
+        </div>
+        <div class="pinned-bar hidden" id="pinned-bar">
+          📌 <div class="pin-text" id="pinned-text"></div>
+          <button class="icon-btn" id="unpin-btn" style="width:26px;height:26px;">✕</button>
+        </div>
+        <div id="in-chat-search" class="hidden" style="padding:8px 20px;border-bottom:1px solid var(--line);background:var(--panel);">
+          <input type="text" id="in-chat-search-input" placeholder="Search messages in this chat..." style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--input-bg);font-size:.85rem;">
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="typing-row hidden" id="typing-row"><div class="typing-bubble"><span></span><span></span><span></span></div></div>
+        <div class="reply-bar hidden" id="reply-bar">
+          <div class="rb-text"><div class="rb-name" id="rb-name"></div><div id="rb-snippet"></div></div>
+          <button class="icon-btn" id="cancel-reply-btn" style="width:28px;height:28px;">✕</button>
+        </div>
+        <div class="composer">
+          <div class="preview-strip" id="preview-strip"></div>
+          <div class="upload-progress hidden" id="upload-progress"><div class="bar" id="upload-bar" style="width:0%;"></div></div>
+          <div id="recording-ui" class="hidden" style="margin-bottom:8px;"><div class="recording-indicator">🔴 Recording <span id="record-timer">0:00</span> <button class="link-btn" id="cancel-record-btn" style="margin-left:auto;">Cancel</button></div></div>
+          <div class="composer-row" id="composer-row">
+            <button class="icon-btn" id="emoji-btn" title="Emoji & stickers">😊</button>
+            <button class="icon-btn" id="attach-btn" title="Attach file">📎</button>
+            <input type="file" id="file-input" multiple class="hidden">
+            <input type="file" id="camera-input" accept="image/*,video/*" capture="environment" class="hidden">
+            <button class="icon-btn" id="camera-btn" title="Camera">📷</button>
+            <textarea id="msg-input" rows="1" placeholder="Message..."></textarea>
+            <button class="icon-btn mic-btn" id="mic-btn" title="Voice message">🎤</button>
+            <button class="send-btn" id="send-btn">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div id="detail-panel"></div>
+<div id="toast-stack"></div>
+<div id="modal-root"></div>
+<div id="lightbox" class="hidden"><button class="lb-close" id="lb-close">✕</button><div id="lb-content"></div></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
