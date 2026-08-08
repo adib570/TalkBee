@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isMe(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function chatData(chatId) {
+      return get(/databases/$(database)/documents/chats/$(chatId)).data;
+    }
+    function isChatMember(chatId) {
+      return isSignedIn() && request.auth.uid in chatData(chatId).members;
+    }
+
+    // ---- USERS ----
+    // Any signed-in user can read basic profile info (needed for chat list, presence, search).
+    // Only the owner can write their own profile.
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isMe(userId);
+      allow update: if isMe(userId);
+      allow delete: if false;
+    }
+
+    // ---- CHATS ----
+    match /chats/{chatId} {
+      allow read: if isChatMember(chatId);
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.members;
+      // Only existing members can update (send messages updates lastMessage/unreadCounts here too).
+      allow update: if isChatMember(chatId);
+      allow delete: if false;
+
+      // ---- MESSAGES ----
+      match /messages/{messageId} {
+        allow read: if isChatMember(chatId);
+        allow create: if isChatMember(chatId)
+                       && request.resource.data.senderId == request.auth.uid;
+        // Sender can edit/delete their own message; any member can update readBy (read receipts).
+        allow update: if isChatMember(chatId) && (
+                        resource.data.senderId == request.auth.uid ||
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy", "deletedFor"])
+                      );
+        allow delete: if false;
+      }
+
+      // ---- TYPING INDICATORS ----
+      match /typing/{userId} {
+        allow read: if isChatMember(chatId);
+        allow write: if isMe(userId);
+      }
+    }
+
+    // ---- REPORTS ----
+    // Any signed-in user can file a report; only the reporter can read their own report back.
+    // (A real admin panel would use custom claims to grant broader read access here.)
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterUid == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.reporterUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}
