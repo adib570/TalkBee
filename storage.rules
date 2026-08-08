@@ -1,0 +1,28 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isChatMember(chatId) {
+      return isSignedIn() &&
+        request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(chatId)).data.members;
+    }
+
+    // Chat attachments: only members of the chat can upload/read files for that chat.
+    match /chats/{chatId}/{fileName} {
+      allow read: if isChatMember(chatId);
+      allow write: if isChatMember(chatId)
+                   && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    // Profile photos: anyone signed in can view avatars; only the owner can write their own.
+    match /avatars/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+                   && fileName.matches(request.auth.uid + '_.*')
+                   && request.resource.size < 10 * 1024 * 1024;
+    }
+  }
+}
